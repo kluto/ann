@@ -1,6 +1,6 @@
 import numpy as np
 
-class networt():
+class network():
     def __init__(self):
         # Network architecture
         self.s_input = 2
@@ -21,7 +21,7 @@ class networt():
         a3 = self.sigmoid(self.z3)
         return a3
         
-    def sigmoid(z, deriv=False):
+    def sigmoid(self, z, deriv=False):
         if deriv:
-            return z*(1-z)
+            return self.sigmoid(z)*(1-self.sigmoid(z))
         return 1/(1+np.exp(-z))
