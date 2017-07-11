@@ -43,34 +43,8 @@ class Network():
         a3 = self.sigmoid(self.z3)
         return a3
 
-    def get_params(self):
-        #Get W1 and W2 unrolled into vector:
-        params = np.concatenate((self.W1.ravel(), self.W2.ravel()))
-        return params
-    
-
-class Trainer():
-    def __init__(self, N):
-        self.N = N
 
 
-    def train(self, X, y):
-        self.X = X
-        self.y = y
-        self.J = []
-        
-        params0 = self.N.getParams()
-
-        options = {'maxiter': 200, 'disp' : True}
-        _res = optimize.minimize(self.costFunctionWrapper, params0, jac=True, method='BFGS', \
-                                 args=(X, y), options=options, callback=self.callbackF)
-
-        self.N.setParams(_res.x)
-        self.optimizationResults = _res
-
-
-
-# x = (hours sleeping, hours studying), y = Score on test
 x = np.array([[3, 5], [5, 1], [10, 2]], dtype=float)
 y = np.array([[75], [82], [93]], dtype=float)
 
