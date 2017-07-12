@@ -42,23 +42,23 @@ class Network():
         # output activity
         a3 = self.sigmoid(self.z3)
         return a3
-
-
-
-x = np.array([[3, 5], [5, 1], [10, 2]], dtype=float)
-y = np.array([[75], [82], [93]], dtype=float)
-
-x = x/np.amax(x, axis=0)
-y = y/100
-scalar = 3
-
-NN = Network()
-print('NN initialised with cost:', NN.cost(x, y))
-for _ in range(100):
-    dJdW1, dJdW2 = NN.backprop(x, y)
-    NN.W1 = NN.W1 - scalar * dJdW1
-    NN.W2 = NN.W2 - scalar * dJdW2
-    print(NN.cost(x, y))
+#
+#
+#
+#x = np.array([[3, 5], [5, 1], [10, 2]], dtype=float)
+#y = np.array([[75], [82], [93]], dtype=float)
+#
+#x = x/np.amax(x, axis=0)
+#y = y/100
+#scalar = 3
+#
+#NN = Network()
+#print('NN initialised with cost:', NN.cost(x, y))
+#for _ in range(100):
+#    dJdW1, dJdW2 = NN.backprop(x, y)
+#    NN.W1 = NN.W1 - scalar * dJdW1
+#    NN.W2 = NN.W2 - scalar * dJdW2
+#    print(NN.cost(x, y))
 
 
 

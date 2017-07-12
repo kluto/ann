@@ -3,14 +3,16 @@ from matplotlib import pyplot as plt
 from scipy import optimize
 
 class Network():
-    def __init__(self, s_in, s_hid1, s_out):
+    def __init__(self, s_in, s_hid1, s_hid2, s_out):
         # Network architecture
         self.s_input = s_in
         self.s_output = s_out
         self.s_hidden1 = s_hid1
+        self.s_hidden2 = s_hid2
         # Weights dim implied by architecture
         self.W1 = np.random.randn(self.s_input, self.s_hidden1)
-        self.W2 = np.random.randn(self.s_hidden1, self.s_output)
+        self.W2 = np.random.randn(self.s_hidden1, self.s_hidden2)
+        self.W3 = np.random.randn(self.s_hidden2, self.s_output)
 
     def sigmoid(self, z, deriv=False):
         if deriv:
@@ -18,8 +20,8 @@ class Network():
         return 1/(1+np.exp(-z))
 
     def gradient(self, X, y):
-        dJdW1, dJdW2 = self.backprop(X, y)
-        return np.concatenate((dJdW1.ravel(), dJdW2.ravel()))
+        dJdW1, dJdW2, dJdW3 = self.backprop(X, y)
+        return np.concatenate((dJdW1.ravel(), dJdW2.ravel(), dJdW3.ravel()))
 
     def cost(self, X, y):
         self.y_hat = self.feed(X)
@@ -27,15 +29,13 @@ class Network():
         
     def backprop(self, X, y):
         self.y_hat = self.feed(X)
-        # output layer error                    
-        d_3 = -(y - self.y_hat) * self.sigmoid(self.z3, deriv=True)
-        # propagate to layer2 weigths
+        d_4 = -(y - self.y_hat) * self.sigmoid(self.z4, deriv=True)
+        grad_W3 = np.dot(self.a3.T, d_4)
+        d_3 = np.dot(d_4, self.W3.T) * self.sigmoid(self.z3, deriv=True)
         grad_W2 = np.dot(self.a2.T, d_3)
-        # layer2 error 
         d_2 = np.dot(d_3, self.W2.T) * self.sigmoid(self.z2, deriv=True)
-        # propagate to input layer
         grad_W1 = np.dot(X.T, d_2)
-        return grad_W1, grad_W2
+        return grad_W1, grad_W2, grad_W3
     
     def feed(self, N):
         # hidden layer activity
@@ -45,20 +45,26 @@ class Network():
         # output layer activity
         self.z3 = np.dot(self.a2, self.W2)
         # output activity
-        a3 = self.sigmoid(self.z3)
-        return a3
+        self.a3 = self.sigmoid(self.z3)
+        # output layer activity
+        self.z4 = np.dot(self.a3, self.W3)
+        # output activity
+        a4 = self.sigmoid(self.z4)
+        return a4
 
     def get_weigths(self):
         # roll-out matrices
-        return np.concatenate((self.W1.ravel(), self.W2.ravel()))
+        return np.concatenate((self.W1.ravel(), self.W2.ravel(), self.W3.ravel()))
 
     def set_weights(self, W):
         # roll-in matrices
         W1_start = 0
         W1_end = self.s_hidden1 * self.s_input
         self.W1 = np.reshape(W[W1_start:W1_end], (self.s_input , self.s_hidden1))
-        W2_end = W1_end + self.s_hidden1 * self.s_output
-        self.W2 = np.reshape(W[W1_end:W2_end], (self.s_hidden1, self.s_output))
+        W2_end = W1_end + self.s_hidden1 * self.s_hidden2
+        self.W2 = np.reshape(W[W1_end:W2_end], (self.s_hidden1, self.s_hidden2))
+        W3_end = W2_end + self.s_hidden2 * self.s_output
+        self.W3 = np.reshape(W[W2_end:W3_end], (self.s_hidden2, self.s_output))
 
 
 
@@ -93,11 +99,11 @@ class Trainer():
 #
 #X = X/np.amax(X, axis=0)
 #y = y/100
-#scalar = 3
-#
-#NN = Network()
+##scalar = 3
+##
+#NN = Network(2, 3, 2, 1)
 #T = Trainer(NN)
-#T.train(X, y)
+#T.train(X, y, 200)
 #
 #plt.plot(T.J)
 #plt.xlabel('Iterations')
