@@ -1,5 +1,4 @@
 import numpy as np
-from matplotlib import pyplot as plt
 from scipy import optimize
 
 class Network():
@@ -67,7 +66,6 @@ class Network():
         self.W3 = np.reshape(W[W2_end:W3_end], (self.s_hidden2, self.s_output))
 
 
-
 class Trainer():
     def __init__(self, N):
         self.N = N
@@ -92,19 +90,3 @@ class Trainer():
                                  args=(X, y), options=options, callback=self.callback)
         self.N.set_weights(_res.x)
         self.opt_results = _res
-
-
-#X = np.array([[3, 5], [5, 1], [10, 2]], dtype=float)
-#y = np.array([[75], [82], [93]], dtype=float)
-#
-#X = X/np.amax(X, axis=0)
-#y = y/100
-##scalar = 3
-##
-#NN = Network(2, 3, 2, 1)
-#T = Trainer(NN)
-#T.train(X, y, 200)
-#
-#plt.plot(T.J)
-#plt.xlabel('Iterations')
-#plt.ylabel('Cost')
