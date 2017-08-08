@@ -14,11 +14,10 @@ class MemoryNet():
         self.diffstart = {'TG':[], 'SD':[]}
         self.scale_bounds = {'TG':(-1, 1), 'RR':(-1, 1), 'SD':(-1, 1),
                              'dTG':(-1, 1), 'dSD':(-1, 1)}
-        self.seq_len = 200
 
     # load data
     def load(self, sliced=False):
-        raw = pd.read_csv('KREDARICA.csv', sep=';', index_col=0)
+        raw = pd.read_csv('KREDARICA2.csv', sep=';', index_col=0)
         diffed = self._diff(raw)
         scaled = self._scale(diffed)
         X = scaled.as_matrix(columns=['TG','RR'])
@@ -77,14 +76,14 @@ class MemoryNet():
         model.add(GRU(neurons, batch_input_shape=(batch_size, X.shape[1], X.shape[2]), stateful=True))
         model.add(Dense(1))
         model.compile(loss='mean_squared_error', optimizer='adam')
-        tbCallBack = TensorBoard(log_dir='tb', histogram_freq=0, 
-                                 write_graph=True, write_images=True)
+#        tbCallBack = TensorBoard(log_dir='tb', histogram_freq=0, 
+#                                 write_graph=True, write_images=True)
 #        for i in range(nb_epoch):
 #            model.fit(X, y, epochs=1, batch_size=batch_size, 
-#                      verbose=0, shuffle=False)
+#                      verbose=0, shuffle=False, callbacks=[tbCallBack])
 #            model.reset_states()
         model.fit(X, y, epochs=nb_epoch, batch_size=batch_size, 
-                  verbose=0, shuffle=False, callbacks=[tbCallBack])
+                  verbose=1, shuffle=False)
         self.model = model
 
     def one_step(self):

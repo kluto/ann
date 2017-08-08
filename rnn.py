@@ -1,33 +1,30 @@
 import matplotlib.pyplot as plt
 import numpy as np
+#np.random.seed(1)
 import pandas as pd
 import time
 from keras.callbacks import EarlyStopping, TensorBoard
-from keras.layers import Dense, LSTM, GRU
+from keras.layers import Dense, GRU, LSTM
 from keras.models import Sequential
-from sklearn.metrics import mean_squared_error
-from math import sqrt
+#from sklearn.metrics import mean_squared_error
+#from math import sqrt
 
 class MemoryNet():
     def __init__(self, lookback):
         self.scale_minmax = dict()
-        self.diffstart = {'TG':[], 'SD':[]}
-        self.scale_bounds = {'TG':(-1, 1), 'RR':(-1, 1), 'SD':(-1, 1),
-                             'dTG':(-1, 1), 'dSD':(-1, 1)}
+        self.scale_bounds = {'full':(-1, 1)}
         self.seq_len = lookback
         self.test_frac = 0.25
-        self.load()
+        # self.load(dataset)
 
     # load data
-    def load(self):
-        raw = pd.read_csv('KREDARICA.csv', sep=';', index_col=0)
-        diffed = self._diff(raw)
-        scaled = self._scale(diffed)
-        filtered = scaled.as_matrix(columns=['TG','RR','SD'])
+    def load(self, raw, col, ycol, neurons):
+        scaled = self._scale(raw)
+        filtered = scaled.as_matrix(columns=col)
         test_len = int(len(filtered) * self.test_frac)
         # Untouched data for visual fit evaluation
-        self.y_train_raw = raw['SD'].values[self.seq_len+1:-test_len]
-        self.y_test_raw = raw['SD'].values[-test_len:]
+        self.y_train_raw = raw[ycol].values[self.seq_len+1:-test_len]
+        self.y_test_raw = raw[ycol].values[-test_len:]
         # Number of training sequences
         nbatch = len(filtered) - self.seq_len - 1
         # Container for training and test array (nb of training sequences, sequence length, features)
@@ -40,32 +37,38 @@ class MemoryNet():
         # Split dataset into training and testing
         self.X_train, self.y_train = X_shaped[:-test_len], y_shaped[:-test_len]
         self.X_test, self.y_test = X_shaped[-test_len:], y_shaped[-test_len:]
-
-
-    def _diff(self, raw):
-        output = raw.copy()
-        for key in self.diffstart.keys():
-            newkey = 'd' + key
-            output[newkey] = output[key].diff(1)
-            self.diffstart[key].append(output[key].iloc[0])
-        return output
+        # Set up the neural net
+        self.model = Sequential()
+        self.model.add(GRU(neurons, input_shape=(self.X_train.shape[1], 
+                                                 self.X_train.shape[2]),
+                            return_sequences=False))
+        self.model.add(Dense(1))
+        self.model.compile(loss='mean_squared_error', optimizer='adam')
 
     def _scale(self, raw):
         p = self.scale_bounds
         scalers = dict()
         scaled = pd.DataFrame(index=raw.index)
-        for pkey in p.keys():
-            df = raw[pkey]
+        for col in raw.columns:
+            if col in p.keys():
+                pkey = col
+            else:
+                pkey = 'full'
+            df = raw[col]
             dfmin = df.min()
             dfmax = df.max()
-            scaled[pkey] = (df - dfmin) * (p[pkey][1] - p[pkey][0]) \
+            scaled[col] = (df - dfmin) * (p[pkey][1] - p[pkey][0]) \
                             / (dfmax - dfmin) + p[pkey][0]
-            scalers[pkey] = (dfmin, dfmax)
+            scalers[col] = (dfmin, dfmax)
         self.scale_minmax = scalers
         return scaled
 
-    def reverse(self, data, slabel, diffed=False, start=False):
-        dfmin, dfmax = self.scale_minmax[slabel][0], self.scale_minmax[slabel][1]
+    def reverse(self, data, label, diffed=False, start=False):
+        if label in self.scale_bounds.keys():
+            slabel = label
+        else:
+            slabel = 'full'
+        dfmin, dfmax = self.scale_minmax[label][0], self.scale_minmax[label][1]
         lb, ub = self.scale_bounds[slabel][0], self.scale_bounds[slabel][1]
         descaled = (data - lb) * (dfmax - dfmin) \
                     / (ub - lb) + dfmin 
@@ -77,33 +80,58 @@ class MemoryNet():
         return pd.DataFrame(descaled, columns={slabel})
 
     # fit an LSTM network to training data    
-    def train(self, nb_epoch, neurons):
+    def train(self, epoch_increment, single_run=False):
         start_time = time.time()
-        X = self.X_train
-        y = self.y_train
-        batch_size = X.shape[0]
-        model = Sequential()
-        model.add(GRU(neurons, input_shape=(X.shape[1], X.shape[2]),
-                                             return_sequences=False))
-        model.add(Dense(1))
-        model.compile(loss='mean_squared_error', optimizer='adam')
-        early_stopping = EarlyStopping(monitor='val_loss', patience=10)
-        hist = model.fit(X, y, epochs=nb_epoch, batch_size=batch_size, 
-                            validation_data=(self.X_test, self.y_test),
-                            shuffle=False, verbose=0, callbacks=[early_stopping])
-        self.loss, self.vloss = hist.history['loss'][-1], hist.history['val_loss'][-1]
-        self.model = model
-        yhat_tr = model.predict(self.X_train)
-        self.yhat_tr_rev = self.reverse(yhat_tr, 'SD')
-        yhat_te = model.predict(self.X_test)
-        self.yhat_te_rev = self.reverse(yhat_te, 'SD')
-        #self.rmse = sqrt(mean_squared_error(self.y_test_raw, self.yhat_te_rev))
-        self.elapsed = time.time() - start_time
+        batch_size = self.X_train.shape[0]
+        previous_loss = 999
+        keep_training = True
+        max_epochs = 10000
+        n = 0
+        vb = 0
+        while keep_training:
+            if single_run:
+                keep_training = False
+                vb = 1
+            hist = self.model.fit(self.X_train, self.y_train, epochs=epoch_increment, 
+                                  batch_size=batch_size, validation_data=(self.X_test, self.y_test),
+                                  shuffle=True, verbose=vb)
+            this_loss = hist.history['val_loss'][-1]
+            if this_loss >= previous_loss or this_loss == 'nan' or epochs_total > max_epochs:
+                keep_training = False
+            previous_loss = this_loss
+            n += 1
+            epochs_total = n * epoch_increment
+            print('>> {} epochs, validation loss {}'.format(epochs_total, round(this_loss, 5)))
+#        ES = EarlyStopping(monitor='val_loss', patience=500)
+#        hist = self.model.fit(self.X_train, self.y_train, epochs=epoch_increment, 
+#                              batch_size=batch_size, validation_data=(self.X_test, self.y_test),
+#                              shuffle=False, verbose=0, callbacks=[ES])
+#        this_loss = hist.history['val_loss'][-1]
+        self.loss, self.vloss = hist.history['loss'][-1], this_loss
+        self.epochs_completed = n * epoch_increment
+        self.train_time = time.time() - start_time
         
-    def plot(self):
-        self.plot_results(self.yhat_tr_rev, self.y_train_raw, 'Training Set')
-        self.plot_results(self.yhat_te_rev, self.y_test_raw, 'Test Set')
+    def predict(self, ycol):
+        self.yhat_tr = self.model.predict(self.X_train)
+        self.yhat_tr_rev = self.reverse(self.yhat_tr, ycol)
+        self.yhat_te = self.model.predict(self.X_test)
+        self.yhat_te_rev = self.reverse(self.yhat_te, ycol)
+        #self.rmse = sqrt(mean_squared_error(self.y_test_raw, self.yhat_te_rev))
+        
+    def plot(self, scaled=False):
+        if scaled:
+            self.plot_results(self.yhat_tr, self.y_train, 'Training Set')
+            self.plot_results(self.yhat_te, self.y_test, 'Test Set')
+        else:
+            self.plot_results(self.yhat_tr_rev, self.y_train_raw, 'Training Set')
+            self.plot_results(self.yhat_te_rev, self.y_test_raw, 'Test Set')
 
+    def save(self, path, json=False):
+        self.model.save(path+'.h5')
+        if json:
+            model_json = self.model.to_json()
+            with open(path+'.json', "w") as json_file:
+                json_file.write(model_json)                       
 
     def plot_results(self, predicted_data, true_data, title):
         fig = plt.figure(facecolor='white')
@@ -114,27 +142,3 @@ class MemoryNet():
         plt.title(title)
         plt.grid(True)
         plt.show()
-
-
-if __name__ == "__main__":
-    node_range = range(2,21,2)
-    lb_range = range(50,151,10)
-#    node_range = [2]
-#    lb_range = [50]
-    summary = []
-    tot = len(node_range) * len(lb_range)
-    counter = 0
-    for n in node_range:
-        for l in lb_range:
-            nodes = n
-            lookback = l
-            NN = MemoryNet(l)
-            NN.train(1000, nodes)
-            #NN.plot()
-            summary.append([n, l, round(NN.elapsed, 2), round(NN.loss, 4), round(NN.vloss, 4)])
-            counter += 1    
-            print('\r', round(100*counter/tot,1), '%  completed. Last fit took',
-                  round(NN.elapsed, 2), 'sec', end='')
-        
-    output = pd.DataFrame(summary, columns=['Nodes','Lookback','Time','Loss','ValLoss'])
-    output.to_csv('summaryLSTM.csv', sep=',')
